@@ -1,6 +1,6 @@
-#include "log.h"
-#include "format.h"
-#include "blatParser.h"
+#include <bios/log.h>
+#include <bios/format.h>
+#include <bios/blatParser.h>
 
 int checkOriginal ( BlatQuery* blQ, PslEntry* entry ) 
 {
