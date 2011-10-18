@@ -2,115 +2,118 @@
 #include <bios/log.h>
 #include <bios/hlrmisc.h>
 #include <bios/bgrParser.h>
+#include <bios/intervalFind.h>
+#include <bios/common.h>
+#include <math.h>
+
+typedef struct {
+  double mean;
+  double stdev;
+} Statistics;
+
+static char* bgrFileName;
+
+Statistics* intervalStatistics( Interval* currInterval ) {
+  Array bedGraph;
+  float sumValues = 0.0;
+  float sumValues2 = 0.0;
+  int i;
+  static Stringa buffer = NULL;
+  stringCreateClear(buffer, 50 );
+  stringPrintf( buffer, "tabix %s %s:%d-%d", bgrFileName, currInterval->chromosome, currInterval->start, currInterval->end );
+  bgrParser_initFromPipe ( string( buffer ) ); // "tabix 4240sc_P.bgr.gz.bgz chr21:36000000-38000000" 
+  bedGraph = bgrParser_getAllEntries();
+  bgrParser_deInit();
+  for ( i=0; i<arrayMax( bedGraph ); i++ ) {
+    BedGraph *currBGR = arrp( bedGraph, i, BedGraph );
+    double bgrValue = (double) currBGR->value;
+    sumValues  +=   bgrValue              * (double) ( currBGR->end - currBGR->start );
+    sumValues2 += ( bgrValue * bgrValue ) * (double) ( currBGR->end - currBGR->start );
+  }
+  Statistics *stats;
+  AllocVar( stats );
+  float N = (float) ( currInterval->end - currInterval->start );
+  stats->mean = sumValues / N;
+  stats->stdev = sqrt( (N * sumValues2) - ( sumValues * sumValues ) ) / ( N * (N - 1.0) );
+  //printf( "sumValues:\t%1.6e\tsumValues2:\t%1.6e\t(N*s2):%1.6e\t(s1*s1): %1.6e\t(N*s2) - (s1*s1): %1.6e\tall: %1.6e\nmean: %1.6e\tsd: %1.6e\n", sumValues, sumValues2, (N* sumValues2), (sumValues * sumValues ),  (N* sumValues2) - (sumValues * sumValues ), ( N * (N - 1.0) ), stats->mean, stats->stdev );
+  return stats;
+}
 
 int main( int argc, char** argv) 
 {
-  Array values;
-  Array bedGraph; 
-  int i;
-  bgrParser_initFromPipe ( "tabix 4240sc_P.bgr.gz.bgz chr21:36000000-38000000" );
-  bedGraph = bgrParser_getAllEntries();
-  for ( i=0; i<arrayMax( bedGraph ); i++ ) {
-    BedGraph *currBGR = arrp( bedGraph, i, BedGraph );
-    printf( "%s\t%d\t%d\t%f\n", currBGR->chromosome, currBGR->start, currBGR->end, currBGR->value );
+  Array intervals;
+  Interval* leftInterval;
+  Interval* rightInterval;
+  Statistics* leftStats;
+  Statistics* intronStats;
+  Statistics* rightStats;
+  int i, j;
+
+  bgrFileName = hlr_strdup( argv[2] );
+  // reading interval file
+  intervals = intervalFind_parseFile( argv[1], 0 );
+  
+  for( i=0; i<arrayMax( intervals)-1; i++) {
+    leftInterval = arrp( intervals, i, Interval );
+    rightInterval = arrp( intervals, i+1, Interval );
+    if( !strEqual( leftInterval->chromosome, rightInterval->chromosome ) )
+      continue;
+    leftStats = intervalStatistics( leftInterval );
+    rightStats = intervalStatistics ( rightInterval );
+    Interval* intron;
+    AllocVar( intron );
+    intron->chromosome = hlr_strdup( leftInterval->chromosome );
+    intron->start = leftInterval->end+1;
+    intron->end = rightInterval->start-1;
+    intronStats = intervalStatistics ( intron );
+    if( (intronStats->mean + (1.95*intronStats->stdev) ) > (leftStats->mean - (1.95*leftStats->stdev)) ) {
+      printf("join:");
+      Interval* newInterval;
+      AllocVar( newInterval );
+      newInterval->chromosome= hlr_strdup( leftInterval->chromosome );
+      newInterval->strand = leftInterval->strand;
+      newInterval->start = leftInterval->start;
+      newInterval->end = rightInterval->end;
+      newInterval->name = hlr_strdup(  leftInterval->name );
+      newInterval->subIntervals = arrayCreate( 1, SubInterval);
+      for( j=0; j<1; j++) {
+	SubInterval* subInterval = arrayp( newInterval->subIntervals, arrayMax( newInterval->subIntervals ), SubInterval );
+	subInterval->start = leftInterval->start;
+	subInterval->end = rightInterval->end;
+      }
+      printf("new:\t%s\n",  intervalFind_writeInterval( newInterval ) );
+      freeMem( newInterval );
+    }
+    printf( "(%d):left\t%1.5e\t%1.5e\tright:\t%1.6e\t%1.6e\t\tIntron\t%e\t%e\n", i, leftStats->mean, leftStats->stdev, rightStats->mean, rightStats->stdev, intronStats->mean, intronStats->stdev);
+    freeMem(intron);
   }
-  bgrParser_deInit();
+
   return 0;
 }
 
+  /*  
 
+  Array bedGraphIntron; 
+  Array bedGraphExonLeft;
+  Array bedGraphExonRight;
 
-/*
-
-int c, skip = -1, meta = -1, list_chrms = 0, force = 0, print_header = 0, bed_reg = 0;
-  ti_conf_t conf = ti_conf_gff;
-  struct stat stat_tbi,stat_vcf;
-  char *fnidx = calloc(strlen(argv[optind]) + 5, 1);
-  strcat(strcpy(fnidx, argv[optind]), ".tbi");
- 
-  // retrieve
-  tabix_t *t;
-  // Common source of errors: new VCF is used with an old index
-  stat(fnidx, &stat_tbi);
-  /*stat(argv[optind], &stat_vcf);
-  if ( stat_vcf.st_mtime > stat_tbi.st_mtime )
-    {
-      fprintf(stderr, "[tabix] the index file is older than the vcf file. Please use '-f' to overwrite or reindex.\n");
-      free(fnidx);
-      return 1;
-      }//*/
-/*  free(fnidx);	
-  if ((t = ti_open(argv[optind], 0)) == 0) 
-    die(  "[main] fail to open the data file: %s\n", argv[1] );
-
-  if (strcmp(argv[optind+1], ".") == 0) { // retrieve all
-    ti_iter_t iter;
-    const char *s;
-    int len;
-    iter = ti_query(t, 0, 0, 0);
-    while ((s = ti_read(t, iter, &len)) != 0) {
-      fputs(s, stdout); fputc('\n', stdout);
-    }
-    ti_iter_destroy(iter);
-  } else { // retrieve from specified regions
-    int i, len;
-    ti_iter_t iter;
-    const char *s;
-    const ti_conf_t *idxconf;
-    
-    if (ti_lazy_index_load(t) < 0 && bed_reg == 0) {
-      die("[tabix] failed to load the index file: %s.tbi\n", argv[1]);
-    }
-    idxconf = ti_get_conf(t->idx);
-    
-    /*if ( print_header ) {
-	// If requested, print the header lines here
-	iter = ti_query(t, 0, 0, 0);
-	while ((s = ti_read(t, iter, &len)) != 0) {
-	  if ((int)(*s) != idxconf->meta_char) break;
-	  fputs(s, stdout); fputc('\n', stdout);
-	}
-	ti_iter_destroy(iter);
-	} //*/
-/*    if (bed_reg) {
-      extern int bed_overlap(const void *_h, const char *chr, int beg, int end);
-      extern void *bed_read(const char *fn);
-      extern void bed_destroy(void *_h);
-      
-      const ti_conf_t *conf_ = idxconf ? idxconf : &conf; // use the index file if available
-      void *bed = bed_read(argv[optind+1]); // load the BED file
-      ti_interval_t intv;
-      
-      if (bed == 0) 
-	die( "[main] fail to read the BED file: %s\n", argv[1] );
-      
-      iter = ti_query(t, 0, 0, 0);
-      while ((s = ti_read(t, iter, &len)) != 0) {
-	int c;
-	ti_get_intv(conf_, len, (char*)s, &intv);
-	c = *intv.se; *intv.se = '\0';
-	if (bed_overlap(bed, intv.ss, intv.beg, intv.end)) {
-	  *intv.se = c;
-	  puts(s);
-	}
-	
-	*intv.se = c;
-      }
-      ti_iter_destroy(iter);
-      bed_destroy(bed);
-    } else {
-      for (i = optind + 1; i < argc; ++i) {
-	int tid, beg, end;
-	if (ti_parse_region(t->idx, argv[i], &tid, &beg, &end) == 0) {
-	  iter = ti_queryi(t, tid, beg, end);
-	  while ((s = ti_read(t, iter, &len)) != 0) {
-	    fputs(s, stdout); fputc('\n', stdout);
-	  }
-	  ti_iter_destroy(iter);
-	} 
-	// else fprintf(stderr, "[main] invalid region: unknown target name or minus interval.\n");
-      }
-    }
+bgrParser_initFromPipe ( "tabix 4240sc_P.bgr.gz.bgz chr21:35000000-35999999 " );
+  bedGraphExonLeft = bgrParser_getAllEntries();
+  bgrParser_deInit();
+  bgrParser_initFromPipe ( "tabix 4240sc_P.bgr.gz.bgz chr21:38000001-39000000" );
+  bedGraphExonRight = bgrParser_getAllEntries();
+  bgrParser_deInit();
+  float valueLeft=0.0, valueIntron=0.0, valueRight=0.0;
+  for ( i=0; i<arrayMax( bedGraphExonLeft ); i++ ) {
+    BedGraph *currBGR = arrp( bedGraphExonLeft, i, BedGraph );
+    valueLeft += currBGR->value * ( currBGR->end - currBGR->start);
   }
-  ti_close(t);
-   //*/
+ for ( i=0; i<arrayMax( bedGraphExonRight ); i++ ) {
+    BedGraph *currBGR = arrp( bedGraphExonRight, i, BedGraph );
+    valueRight += currBGR->value * ( currBGR->end - currBGR->start);
+  }
+  printf( "valueLeft:\t %f\nvalueIntron:\t%f\nvalueRight:\t%f\n", (valueLeft*1000.0)/(35999999-35000000+1), (valueIntron*1000.0)/(38000000-36000000+1), (valueRight*1000.0)/(39000000-38000001+1));
+  */
+    //   printf( "%s\t%d\t%d\t%f\n", currBGR->chromosome, currBGR->start, currBGR->end, currBGR->value );
+
+
