@@ -52,11 +52,17 @@ int main( int argc, char** argv)
   int numMulti      = 0;
   int maxUTRdist    = 2000;
   int type;
-  /* if( argc < 3 ) {
+  if( argc < 3 ) {
     usage("%s <transcriptome.interval> <TARs.interval> <maxUTRdist>", argv[0]);
-    }*/
-  intervalFind_addIntervalsToSearchSpace ( "/net/gerstein/annotations/human/hg19/GENCODE/v3c/gencode.v3c.annotation.GRCh37.transcript.gtpc.ttpc.composite.interval", 0);
-  TARs = intervalFind_parseFile ("/net/gerstein/brainSeq/human_adult_project/withoutChrM/NOVEL/all.novel.noChrM.novel.0.0505728.50.100.filtered.interval", 1);
+  }
+  // "/net/gerstein/annotations/human/hg19/GENCODE/v3c/gencode.v3c.annotation.GRCh37.transcript.gtpc.ttpc.composite.interval"
+  intervalFind_addIntervalsToSearchSpace ( argv[1], 0);
+  // "/net/gerstein/brainSeq/human_adult_project/withoutChrM/NOVEL/all.novel.noChrM.novel.0.0505728.50.100.filtered.interval"
+  TARs = intervalFind_parseFile ( argv[2], 1);
+  
+  maxUTRdist = atoi ( argv[3] );
+  if( maxUTRdist < 1 ) 
+    die( "Max UTR distance needs to be positve (or non-numeric data): %d", maxUTRdist);
   
   AllocVar(currInterval);
   for( i=0; i < arrayMax( TARs ); i++ ) {
