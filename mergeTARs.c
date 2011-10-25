@@ -89,24 +89,31 @@ void writeMergedInterval(Interval* leftInterval, Interval* rightInterval ) {
 
 int main( int argc, char** argv) 
 {
-  Array intervals; Array merge;
+  Array intervals; // of Interval
+  Array merge; // of short int
   int i, j;
   short int found;
+  Stringa buffer = stringCreate( 20 );
 
-  Array tars = arrayCreate( 5000, Expression );
-  Array introns = arrayCreate( 5000, Expression );
+  if( argc != 4 ) {
+    usage( "%s <tar.interval> <tar.expression.gz> <tarIntronic.expression.gz>", argv[0] );
+  }
+
+  Array tars = arrayCreate( 5000, Expression ); // of Expression
+  Array introns = arrayCreate( 5000, Expression ); // of Expression
+
  // reading interval file
   intervals = intervalFind_parseFile( argv[1], 0 );
   merge = arrayCreate( arrayMax(intervals)-1, short int );
 
-  char* buffer = hlr_strdup( "zcat all.novel.filtered.merged.expression_2011.02.23.csv.gz" );
-  readExpression( tars, buffer );
-  buffer = hlr_strdup( "zcat all.tarintronic.expression_2011.10.19.csv.gz" );
-  readExpression( introns, buffer );
-  hlr_free( buffer );
+  stringPrintf( buffer ,  "zcat %s", argv[2] ); //all.novel.filtered.merged.expression_2011.02.23.csv.gz" );
+  readExpression( tars, string(buffer) );
+  stringPrintf( buffer,  "zcat %s", argv[3]); //all.tarintronic.expression_2011.10.19.csv.gz" );
+  readExpression( introns, string(buffer) );
+  stringDestroy( buffer );
 
-  arraySort( tars, (ARRAYORDERF) sortExpressionByName );
-  arraySort( introns,  (ARRAYORDERF) sortExpressionByName );
+  arraySort( tars, (ARRAYORDERF) sortExpressionByName ); 
+  arraySort( introns,  (ARRAYORDERF) sortExpressionByName ); 
 
   for ( i = 0; i<arrayMax( intervals)-1; i++ ) {
     if( strEqual( arrp(intervals, i, Interval)->chromosome, arrp(intervals, i+1, Interval)->chromosome) &&
@@ -128,8 +135,11 @@ int main( int argc, char** argv)
       
       if ( correlation( exprTARL, exprTARR) ) {
 	found = arrayFind( introns, exprTARL, &j, (ARRAYORDERF) sortExpressionByName );
-	if( !found )
+	if( !found ) {
+	  arru( merge, i, short int) = 0;
 	  warn("TAR not found %s", exprTARL->name );
+	  continue;
+	}
 	Expression* currIntron;
 	AllocVar( currIntron );
 	currIntron = arrp( introns, j, Expression );
@@ -157,91 +167,4 @@ int main( int argc, char** argv)
   return 0;
 }
 
-  /*  
-  bgrFileName = hlr_strdup( argv[2] );
  
-  
-  for( i=0; i<arrayMax( intervals)-1; i++) {
-    leftInterval = arrp( intervals, i, Interval );
-    rightInterval = arrp( intervals, i+1, Interval );
-    if( !strEqual( leftInterval->chromosome, rightInterval->chromosome ) )
-      continue;
-    leftStats = intervalStatistics( leftInterval );
-    rightStats = intervalStatistics ( rightInterval );
-    Interval* intron;
-    AllocVar( intron );
-    intron->chromosome = hlr_strdup( leftInterval->chromosome );
-    intron->start = leftInterval->end+1;
-    intron->end = rightInterval->start-1;
-    intronStats = intervalStatistics ( intron );
-    if( (intronStats->mean + (1.95*intronStats->stdev) ) > (leftStats->mean - (1.95*leftStats->stdev)) ) {
-      printf("join:");
-     
-    }
-    printf( "(%d):left\t%1.5e\t%1.5e\tright:\t%1.6e\t%1.6e\t\tIntron\t%e\t%e\n", i, leftStats->mean, leftStats->stdev, rightStats->mean, rightStats->stdev, intronStats->mean, intronStats->stdev);
-    freeMem(intron);
-  }
-
-
-
-
-
-typedef struct {
-  double mean;
-  double stdev;
-} Statistics;
-
-static char* bgrFileName;
-
-Statistics* intervalStatistics( Interval* currInterval ) {
-  Array bedGraph;
-  float sumValues = 0.0;
-  float sumValues2 = 0.0;
-  int i;
-  static Stringa buffer = NULL;
-  stringCreateClear(buffer, 50 );
-  stringPrintf( buffer, "tabix %s %s:%d-%d", bgrFileName, currInterval->chromosome, currInterval->start, currInterval->end );
-  bgrParser_initFromPipe ( string( buffer ) ); // "tabix 4240sc_P.bgr.gz.bgz chr21:36000000-38000000" 
-  bedGraph = bgrParser_getAllEntries();
-  bgrParser_deInit();
-  for ( i=0; i<arrayMax( bedGraph ); i++ ) {
-    BedGraph *currBGR = arrp( bedGraph, i, BedGraph );
-    double bgrValue = (double) currBGR->value;
-    sumValues  +=   bgrValue              * (double) ( currBGR->end - currBGR->start );
-    sumValues2 += ( bgrValue * bgrValue ) * (double) ( currBGR->end - currBGR->start );
-  }
-  Statistics *stats;
-  AllocVar( stats );
-  float N = (float) ( currInterval->end - currInterval->start );
-  stats->mean = sumValues / N;
-  stats->stdev = sqrt( (N * sumValues2) - ( sumValues * sumValues ) ) / ( N * (N - 1.0) );
-  //printf( "sumValues:\t%1.6e\tsumValues2:\t%1.6e\t(N*s2):%1.6e\t(s1*s1): %1.6e\t(N*s2) - (s1*s1): %1.6e\tall: %1.6e\nmean: %1.6e\tsd: %1.6e\n", sumValues, sumValues2, (N* sumValues2), (sumValues * sumValues ),  (N* sumValues2) - (sumValues * sumValues ), ( N * (N - 1.0) ), stats->mean, stats->stdev );
-  return stats;
-}
-
-
-
-  Array bedGraphIntron; 
-  Array bedGraphExonLeft;
-  Array bedGraphExonRight;
-
-bgrParser_initFromPipe ( "tabix 4240sc_P.bgr.gz.bgz chr21:35000000-35999999 " );
-  bedGraphExonLeft = bgrParser_getAllEntries();
-  bgrParser_deInit();
-  bgrParser_initFromPipe ( "tabix 4240sc_P.bgr.gz.bgz chr21:38000001-39000000" );
-  bedGraphExonRight = bgrParser_getAllEntries();
-  bgrParser_deInit();
-  float valueLeft=0.0, valueIntron=0.0, valueRight=0.0;
-  for ( i=0; i<arrayMax( bedGraphExonLeft ); i++ ) {
-    BedGraph *currBGR = arrp( bedGraphExonLeft, i, BedGraph );
-    valueLeft += currBGR->value * ( currBGR->end - currBGR->start);
-  }
- for ( i=0; i<arrayMax( bedGraphExonRight ); i++ ) {
-    BedGraph *currBGR = arrp( bedGraphExonRight, i, BedGraph );
-    valueRight += currBGR->value * ( currBGR->end - currBGR->start);
-  }
-  printf( "valueLeft:\t %f\nvalueIntron:\t%f\nvalueRight:\t%f\n", (valueLeft*1000.0)/(35999999-35000000+1), (valueIntron*1000.0)/(38000000-36000000+1), (valueRight*1000.0)/(39000000-38000001+1));
-  */
-    //   printf( "%s\t%d\t%d\t%f\n", currBGR->chromosome, currBGR->start, currBGR->end, currBGR->value );
-
-
