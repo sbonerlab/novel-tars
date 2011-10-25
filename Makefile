@@ -15,7 +15,7 @@ SHELL = /bin/bash
 
 # ----------------------- entry points --------------
 
-PROGRAMS=readBgr sequenceFilter annotateTARs tarintron2interval
+PROGRAMS=readBgr sequenceFilter annotateTARs mergeTARs tarintron2interval
 #convert2interval
 
 MODULES=
@@ -40,6 +40,10 @@ readBgr: readBgr.c
 	-@/bin/rm -f readBgr
 	$(CC) $(CFLAGS) $(CPPFLAGS) readBgr.c -o readBgr $(LDFLAGS) -lbios -lm 
 
+mergeTARs: mergeTARs.c
+	-@/bin/rm -f mergeTARs
+	$(CC) $(CFLAGS) $(CPPFLAGS) mergeTARs.c -o mergeTARs $(LDFLAGS) -lbios -lm -lgsl -lgslcblas
+
 tarintron2interval: tarintron2interval.c
 	-@/bin/rm -f tarintron2interval
 	$(CC) $(CFLAGS) $(CPPFLAGS) tarintron2interval.c -o tarintron2interval $(LDFLAGS) -lbios -lm
@@ -47,3 +51,4 @@ tarintron2interval: tarintron2interval.c
 annotateTARs: annotateTARs.c
 	-@/bin/rm -f annotateTARs
 	$(CC) $(CFLAGS) $(CPPFLAGS) annotateTARs.c -o annotateTARs $(LDFLAGS) -lbios -lm
+
