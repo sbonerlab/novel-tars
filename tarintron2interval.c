@@ -5,19 +5,22 @@
 
 int main( int argc, char** argv) 
 {
-  Array intervals;
-  Array genes;
-  Array overlaps;
+  Array intervals; // of Interval
+  Array overlaps; // of Interval*
 
   Interval* leftInterval;
   Interval* rightInterval;
   Interval* intron;
   int i,j;
 
+  if( argc != 3 ) {
+    usage("%s <tars.interval> <genes.interval>", argv[0]);
+  }
+
    // reading tar interval file
   intervals = intervalFind_parseFile( argv[1], 0 );
-  genes = intervalFind_parseFile( argv[2], 0 );
-
+  intervalFind_addIntervalsToSearchSpace( argv[2], 1 );
+  
   for( i=0; i<arrayMax( intervals)-1; i++) {
     leftInterval = arrp( intervals, i, Interval );
     rightInterval = arrp( intervals, i+1, Interval );
@@ -42,7 +45,7 @@ int main( int argc, char** argv)
     } else {
       unsigned short int contained=0;
       for( j = 0; j< arrayMax( overlaps ); j++) {
-	Interval* currOverlap = arrp( overlaps, j, Interval );
+	Interval* currOverlap = arru( overlaps, j, Interval* );
 	if( (intron->start <= currOverlap->start) && ( intron->end >= currOverlap->end ) ) contained=1; // checking if fully contained
       }
       if( !contained ) {
